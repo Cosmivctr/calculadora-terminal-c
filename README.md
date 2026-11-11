@@ -1,16 +1,17 @@
 # Calculadora em C
 
-Este é um dos meus primeiros projetos em linguagem C. Criei uma calculadora de terminal com as quatro operações básicas (soma, subtração, multiplicação e divisão) e, depois, evoluí o projeto adicionando a **raiz quadrada**. O objetivo é praticar os fundamentos da linguagem e documentar o que fui aprendendo no caminho.
+Este é um dos meus primeiros projetos em linguagem C. Comecei com uma calculadora de terminal com as quatro operações básicas e fui evoluindo o projeto aos poucos: adicionei a **raiz quadrada**, o **resto da divisão** e a **validação de entradas inválidas**. O objetivo é praticar os fundamentos da linguagem e documentar o que fui aprendendo no caminho.
 
 Escrevi este README como um diário de estudo: além de mostrar como usar o programa, explico por que escrevi cada parte do código.
 
 ## Funcionalidades
 
 - Soma (`+`), subtração (`-`), multiplicação (`*`) e divisão (`/`)
+- Resto da divisão (`%`), com suporte a números decimais
 - Raiz quadrada (`r`), que usa apenas um número
 - Suporte a números decimais (tipo `double`)
-- Tratamento de divisão por zero
-- Tratamento de raiz de número negativo
+- Tratamento de divisão por zero, resto por zero e raiz de número negativo
+- Validação de entrada: se o usuário digitar letras no lugar de números, o programa pede de novo
 - Validação de operação inválida
 - Repetição de cálculos sem precisar reiniciar o programa
 
@@ -22,25 +23,31 @@ Escrevi este README como um diário de estudo: além de mostrar como usar o prog
 - Repetir ações com um laço
 - Proteger o programa contra entradas problemáticas
 - Usar uma biblioteca externa (`math.h`) e compilar com ela
+- Criar minhas próprias funções para não repetir código
 
 ## Como o programa funciona
 
-1. Pede o primeiro número.
-2. Pede a operação (`+`, `-`, `*`, `/` ou `r` para raiz).
+1. Pede o primeiro número (e só aceita se for um número válido).
+2. Pede a operação (`+`, `-`, `*`, `/`, `%` ou `r` para raiz).
 3. Pede o segundo número, **exceto** na raiz quadrada.
 4. Calcula e mostra o resultado.
 5. Pergunta se quero fazer outro cálculo. Se sim, volta ao passo 1.
 
 ## O que aprendi em cada parte do código
 
-### Bibliotecas `stdio.h` e `math.h`
+### Bibliotecas
 
 ```c
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 ```
 
-O C não sabe, por conta própria, mostrar texto na tela nem ler o teclado. Essas funções (`printf` e `scanf`) vêm da `stdio.h`. Já a `math.h` traz funções matemáticas, como a `sqrt()` da raiz quadrada. Sem essas linhas, o compilador não reconhece as funções.
+- `stdio.h`: traz `printf` e `scanf`. O C não sabe, por conta própria, mostrar texto na tela nem ler o teclado.
+- `stdlib.h`: traz o `exit()`, que uso para encerrar o programa quando a entrada acaba.
+- `math.h`: traz funções matemáticas, como `sqrt()` (raiz quadrada) e `fmod()` (resto com decimais).
+
+Sem essas linhas, o compilador não reconhece as funções.
 
 ### Função `main`
 
@@ -73,7 +80,6 @@ Escolhi o `do...while` porque ele executa o bloco **pelo menos uma vez** antes d
 ### Leitura de dados com `scanf`
 
 ```c
-scanf("%lf", &num1);
 scanf(" %c", &operacao);
 ```
 
@@ -133,16 +139,15 @@ Como o símbolo √ é difícil de digitar no terminal, escolhi a letra `r`. A m
 
 ### 3. Pedir o segundo número só quando necessário
 
-Antes, o programa sempre pedia dois números. Para a raiz isso não faz sentido, então coloquei a leitura de `num2` dentro de um `if`:
+Antes, o programa sempre pedia dois números. Para a raiz isso não faz sentido, então só peço o segundo número quando a operação não é a raiz:
 
 ```c
 if (operacao != 'r') {
-    printf("Digite o segundo numero: ");
-    scanf("%lf", &num2);
+    num2 = lerNumero("Digite o segundo numero: ");
 }
 ```
 
-O `!=` significa "diferente de". Assim, o segundo número só é pedido nas operações que precisam dele.
+O `!=` significa "diferente de".
 
 ### 4. Novo `case 'r'` com validação
 
@@ -163,6 +168,109 @@ Não existe raiz quadrada real de número negativo. Sem a checagem, `sqrt(-9)` d
 
 O `#include <math.h>` apenas avisa ao compilador que a `sqrt` existe. O código dela fica em outra biblioteca, que precisa ser ligada na compilação com a flag `-lm`. Esquecer essa flag gera o erro `undefined reference to 'sqrt'`.
 
+## Adicionando o resto da divisão (%)
+
+O resto trouxe duas pegadinhas novas.
+
+### 1. O operador `%` só funciona com `int`
+
+Se eu escrevesse `num1 % num2` com variáveis `double`, o compilador daria erro. Para manter os números decimais, usei a função `fmod()` da `math.h`:
+
+```c
+case '%':
+    if (num2 == 0) {
+        printf("Erro: resto por zero nao e permitido.\n");
+    } else {
+        resultado = fmod(num1, num2);
+        printf("Resultado: %.2f\n", resultado);
+    }
+    break;
+```
+
+Com `fmod`, `10.5` e `3` dão resto `1.5`. Se eu tivesse convertido para `int` (um *cast*), as casas decimais seriam descartadas e perderia precisão. Também aprendi que, em C, o resto leva o **sinal do primeiro número**: `-7` e `3` dão `-1`.
+
+### 2. O `%` tem significado especial no `printf`
+
+Dentro do texto de um `printf`, o `%` é o início de um formato (como `%lf`). Para mostrar um `%` de verdade na tela, preciso escrever **dois**:
+
+```c
+printf("Digite a operacao (+, -, *, /, %%, r para raiz): ");
+```
+
+Já dentro das aspas simples do `case '%':` não preciso duplicar, porque ali é só um caractere.
+
+## Validando a entrada do usuário
+
+Esta foi a parte em que mais aprendi. Antes, se eu digitasse `abc` onde era esperado um número, o programa quebrava: a variável ficava com lixo de memória e o texto inválido continuava preso no buffer do teclado, fazendo os próximos `scanf` falharem também.
+
+### O retorno do `scanf`
+
+Descobri que o `scanf` **devolve um valor**: a quantidade de itens lidos com sucesso. Eu nunca tinha usado esse retorno.
+
+| Retorno | Significado |
+|---|---|
+| `1` | Leu o número com sucesso |
+| `0` | A entrada não era um número (ex.: `abc`) |
+| `EOF` | A entrada acabou (ex.: Ctrl+D) |
+
+### Função `limparBuffer`
+
+```c
+void limparBuffer(void) {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {
+    }
+}
+```
+
+Ela lê e descarta caracteres do teclado até chegar ao Enter. Uso `int` em vez de `char` porque o `EOF` não cabe com segurança em um `char`. O bloco `{ }` fica vazio porque todo o trabalho acontece na condição do `while`.
+
+### Função `lerNumero`
+
+```c
+double lerNumero(const char *mensagem) {
+    double valor;
+    int lidos;
+
+    while (1) {
+        printf("%s", mensagem);
+        lidos = scanf("%lf", &valor);
+
+        if (lidos == EOF) {
+            printf("\nEntrada encerrada.\n");
+            exit(1);
+        }
+
+        if (lidos == 1) {
+            limparBuffer();
+            return valor;
+        }
+
+        printf("Entrada invalida! Digite apenas numeros.\n");
+        limparBuffer();
+    }
+}
+```
+
+Como preciso ler dois números, criei uma função para não repetir a validação:
+
+- Mostra a pergunta e tenta ler.
+- Se a entrada acabou (`EOF`), encerra o programa com `exit(1)`, senão o laço ficaria preso para sempre.
+- Se leu um número (`1`), limpa o resto da linha e devolve o valor com `return`.
+- Se não era número, avisa, limpa o buffer e pergunta de novo.
+
+O `while (1)` é um laço infinito de propósito: ele só termina quando a função devolve um valor válido ou encerra o programa. No `main`, cada leitura virou uma linha só:
+
+```c
+num1 = lerNumero("Digite o primeiro numero: ");
+```
+
+Também passei a chamar `limparBuffer()` depois de ler a operação e a resposta `s/n`, para que letras extras (como `ab`) não atrapalhem a próxima leitura.
+
+### Uma limitação que ainda existe
+
+Se eu digitar `12abc`, o `scanf` lê o `12` com sucesso e o programa aceita sem avisar. Para rejeitar isso também, teria que ler a linha inteira com `fgets` e converter com `strtod`. Deixei como desafio para uma próxima versão.
+
 ## Como compilar e executar
 
 É preciso ter o [GCC](https://gcc.gnu.org/) instalado.
@@ -180,19 +288,43 @@ Divisão:
 
 ```
 Digite o primeiro numero: 10
-Digite a operacao (+, -, *, /, r para raiz): /
+Digite a operacao (+, -, *, /, %, r para raiz): /
 Digite o segundo numero: 4
 Resultado: 2.50
 Deseja fazer outro calculo? (s/n): n
 Programa encerrado.
 ```
 
-Raiz quadrada (note que o segundo número não é pedido):
+Resto da divisão:
+
+```
+Digite o primeiro numero: 10.5
+Digite a operacao (+, -, *, /, %, r para raiz): %
+Digite o segundo numero: 3
+Resultado: 1.50
+Deseja fazer outro calculo? (s/n): n
+Programa encerrado.
+```
+
+Raiz quadrada (o segundo número não é pedido):
 
 ```
 Digite o primeiro numero: 16
-Digite a operacao (+, -, *, /, r para raiz): r
+Digite a operacao (+, -, *, /, %, r para raiz): r
 Resultado: 4.00
+Deseja fazer outro calculo? (s/n): n
+Programa encerrado.
+```
+
+Entrada inválida (o programa pede de novo):
+
+```
+Digite o primeiro numero: abc
+Entrada invalida! Digite apenas numeros.
+Digite o primeiro numero: 5
+Digite a operacao (+, -, *, /, %, r para raiz): +
+Digite o segundo numero: 3
+Resultado: 8.00
 Deseja fazer outro calculo? (s/n): n
 Programa encerrado.
 ```
@@ -204,12 +336,15 @@ Programa encerrado.
 - Diferenciar `=` de `==`.
 - Entender por que o `scanf` precisa do `&`.
 - Descobrir que a raiz quadrada exige a flag `-lm` na compilação.
+- Perceber que o `%` não funciona com `double` e que, no `printf`, precisa ser escrito `%%`.
+- Entender por que o texto inválido ficava preso no buffer e como limpá-lo.
 
 ## Próximos passos
 
 - [x] Adicionar a raiz quadrada
-- [ ] Adicionar a operação de resto (`%`)
-- [ ] Validar o retorno do `scanf` para quando o usuário digitar letras no lugar de números
+- [x] Adicionar a operação de resto (`%`)
+- [x] Validar o retorno do `scanf` para quando o usuário digitar letras no lugar de números
+- [ ] Rejeitar entradas como `12abc` usando `fgets` e `strtod`
 - [ ] Separar cada operação em funções (`somar`, `subtrair`, etc.)
 - [ ] Adicionar potenciação com `pow()`
 
